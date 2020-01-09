@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #define PORT "2121" // OUR SERVER IS LISTENING TO THIS PORT
-#define msg_buffer_size 10
+#define msg_buffer_size 2000 // circular buffer size
 
 #define CIRC_BBUF_DEF(x,y)                 \
     struct message_info messages_bucket[y];\
