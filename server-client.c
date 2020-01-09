@@ -11,19 +11,19 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define PORT "2103" // PORT MUST BE THE SAME FOR EVERY DEVICE OTHERWISE THIS WON'T WORK
+#define PORT "2121" // OUR SERVER IS LISTENING TO THIS PORT
 #define msg_buffer_size 10
 
-#define CIRC_BBUF_DEF(x,y)                \
-    struct message_info messages_bucket[y];            \
-    circ_bbuf_t x = {                     \
-        .buffer = messages_bucket,  		\
-        .head = 0,                        \
-        .tail = 0,                        \
-        .maxlen = y                       \
+#define CIRC_BBUF_DEF(x,y)                 \
+    struct message_info messages_bucket[y];\
+    circ_bbuf_t x = {                      \
+        .buffer = messages_bucket,  	   \
+        .head = 0,                         \
+        .tail = 0,                         \
+        .maxlen = y                        \
     }
 
-int isEmpty = 1;
+int isEmpty = 1; // flag to check if buffer has been used at least once
 
 // ########## FUNCTIONS ##########
 // Error handling
@@ -116,7 +116,6 @@ char* rand_string_alloc(size_t size)
 int checkIfExists (struct message_info k)
 {
 	int b;
-	//for(b = my_circ_buf.head;b != my_circ_buf.tail; b++){
 	for(b=0; b<msg_buffer_size; b++){
 		if(messages_bucket[b].AEM_sender == k.AEM_sender
 			&& messages_bucket[b].AEM_receiver == k.AEM_receiver
@@ -137,16 +136,16 @@ void *generateMsg()
    
 	  	char to_send[500] = ""; // temp msg variable to send
 
-     	char* msg = rand_string_alloc(msg_size); // create random msg string
+     		char* msg = rand_string_alloc(msg_size); // create random msg string
      	
-     	struct message_info a_message1;
+     		struct message_info a_message1;
      	
-     	// Initialize the a_message value for test purposes
-     	strcpy(a_message1.message, msg);
-     	a_message1.AEM_sender = 8977;
-     	int r = (rand() % 500) + 8501;
-     	a_message1.AEM_receiver = r; //make it random 8500-9000
-     	a_message1.timestamp = (unsigned long long int)time(NULL);
+     		// Initialize the a_message value for test purposes
+     		strcpy(a_message1.message, msg);
+     		a_message1.AEM_sender = 8977;
+     		int r = (rand() % 500) + 8501;
+     		a_message1.AEM_receiver = r; //make it random 8500-9000
+     		a_message1.timestamp = (unsigned long long int)time(NULL);
 
 		// Generate temp message
 		char str[1000];
@@ -168,52 +167,41 @@ void *generateMsg()
 		printf("%s", to_send);
 		
 		// Push newly created message in the bucket
-		//if (circ_bbuf_push(&my_circ_buf, a_message)) {
-       // printf("Out of space in CB\n");
-       // return NULL;
-    	//}
-    	circ_bbuf_push(&my_circ_buf, a_message1);
-    	isEmpty=0;
-    	printf("\nNEW MESSAGE CREATED\n");
+    		circ_bbuf_push(&my_circ_buf, a_message1);
+    		isEmpty=0;
+    		printf("\nNEW MESSAGE CREATED\n");
     	
-    	printf("\n--OUR BUCKET--\n");
-    	for(int i=0; i<msg_buffer_size; i++){
+    		printf("\n--OUR BUCKET--\n");
+    		for(int i=0; i<msg_buffer_size; i++){
     		printf("%d message: %s\n", i+1, messages_bucket[i].message);
     	}
     	
     	// Sleep currect thread for random time 1-5 min till next message to be created
-    	//int r_t = (rand() % 240) + 60; 
-    	//sleep(r_t);
-    	sleep(5);
+    	int r_t = (rand() % 240) + 60; 
+    	sleep(r_t);
+    	//sleep(5);
     }
 	return NULL;
 }
-
+// Discover the server IP/port and send the message by using sockets
 void *send_messages()
 {
-	int sockfd, portno, n;
+    int sockfd, portno, n;
     struct sockaddr_in serv_addr;
     struct hostent *server;
 
     char buffer[256];
-    //
-    //if (argc < 3) {
-    //   fprintf(stderr,"usage %s hostname port\n", argv[0]);
-    //   exit(0);
-    //}
-    //
-    
-    //char HOSTNAME[10] = "127.0.0.1";
+
     for(;;)
     {
     	char HOSTNAME[10] = "10.0.";
-       int hostAvailable = 0;
-       int elem_pos = -1;
+       	int hostAvailable = 0;
+       	int elem_pos = -1;
 
-   		// CHECK FOR NEW CONNECTIONS WITH NMAP
-   		//netstat -an | grep 10.0. | awk -F "[ :]+" '{print $5}'
-   		//this returns ip and PORT.
-   		system("netstat -an | grep 192.168. | awk -F \"[ :]+\" '{print $5}' | tee netstat.log > /dev/null");
+   	// CHECK FOR NEW CONNECTIONS WITH NMAP
+   	//netstat -an | grep 10.0. | awk -F "[ :]+" '{print $5}'
+   	//this returns ip and PORT saved into a file.
+   	system("netstat -an | grep 192.168. | awk -F \"[ :]+\" '{print $5}' | tee netstat.log > /dev/null");
 
     	char c[1000];
     	FILE *fptr;
@@ -223,44 +211,42 @@ void *send_messages()
         	exit(1);
     	}
 
-		// IP, PORT AND SEARCH, SEND AND DESTROY
-   		int the_receiver;
-   		int part1 = 0;
-   		int part2 = 0;
-   		int part3 = 0; //port
+	// IP, PORT AND SEARCH, SEND AND DESTROY
+   	int the_receiver;
+   	int part1 = 0;
+   	int part2 = 0;
+   	int part3 = 0; //port
+	    
+    	// Search for specific Address in the file - if 10.0. format it has encounter a new device
     	while(fscanf(fptr, "%s", c)!=EOF){
     		//printf("Data from the file: %s\n", c);
-    		// Search for specific Address - if 10.0. format it has encounter a new device
     		
-    		// Check IP and if it is 10.0. save it, then save port
-
-   			// SPLIT IP AND PORT
-   			char *ptr = strtok(c, ".");
-   			
-   			if(atoi(ptr)==10){
-   				ptr = strtok(NULL, ".");
-				if(atoi(ptr)==0){ // that means IP is 10.0
-					ptr = strtok(NULL, ".");
-					part1 = atoi(ptr);
-					ptr = strtok(NULL, ".");
-					part2 = atoi(ptr);
-					ptr = strtok(NULL, ".");
-					part3 = atoi(ptr);
-					the_receiver = part1 * 100;
-					the_receiver = the_receiver + part2;
-					hostAvailable = 1;
-					printf("TEST\n\n\n\n");
-				}
-   				// SEARCH IF IP IS ON BUCKET AND RETURN position on bucket
-   				for(int i = 0; i<msg_buffer_size; i++){
-   					if(messages_bucket[i].AEM_receiver == the_receiver){
-   						//found potential message;
-   						elem_pos = i;
-   						break; // TODO: MAKE IT STORE ALL THE MESSAGES AND SEND THEM ALL AT ONCE
-   					}
-   				}
-				break;
+   		// SPLIT IP AND PORT
+   		char *ptr = strtok(c, ".");
+   		// Check IP and if it is 10.0. save it, then save port
+   		if(atoi(ptr)==10){
+   			ptr = strtok(NULL, ".");
+			if(atoi(ptr)==0){ // that means IP is 10.0
+				ptr = strtok(NULL, ".");
+				part1 = atoi(ptr);
+				ptr = strtok(NULL, ".");
+				part2 = atoi(ptr);
+				ptr = strtok(NULL, ".");
+				part3 = atoi(ptr);
+				the_receiver = part1 * 100;
+				the_receiver = the_receiver + part2;
+				hostAvailable = 1;
 			}
+   			// SEARCH IF IP IS ON BUCKET AND RETURN position on bucket
+   			for(int i = 0; i<msg_buffer_size; i++){
+   				if(messages_bucket[i].AEM_receiver == the_receiver){
+   					//found potential message;
+   					elem_pos = i;
+   					break; // TODO: MAKE IT STORE ALL THE MESSAGES AND SEND THEM ALL AT ONCE
+   				}
+   			}
+			break;
+		}
     	}
     	fclose(fptr);
     	sleep(1);
@@ -272,7 +258,7 @@ void *send_messages()
     	strcat(HOSTNAME, ".");
     	sprintf(str, "%d", part2);
     	strcat(HOSTNAME, (char*) str);
-		printf("%s\n", HOSTNAME);
+	printf("%s\n", HOSTNAME);
    
     	// FETCH LAST MESSAGE FROM THE BUCKET
     	//if(isEmpty==0){
@@ -299,7 +285,7 @@ void *send_messages()
        	
     	server = gethostbyname(HOSTNAME);
     	if (server == NULL) {
-       	fprintf(stderr,"ERROR, no such host\n");
+       		fprintf(stderr,"ERROR, no such host\n");
         	//exit(0);
     	} 
     	else if (isEmpty==1) {
@@ -319,36 +305,36 @@ void *send_messages()
     
     		if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0) 
        		error("ERROR connecting");
-    		//printf("Please enter the message: ");
+    		//printf("Please enter the message to send: ");
     		//bzero(buffer,256);
     		//fgets(buffer,255,stdin);
    
-       	// define message to put in buffer
-			struct message_info out_data;
+       		// define message to put in buffer
+		struct message_info out_data;
 	
-	  		char to_send_msg[500] = "";
-	  		char str[1000];
-			sprintf(str, "%d", messages_bucket[elem_pos].AEM_sender);
+	  	char to_send_msg[500] = "";
+	  	char str[1000];
+		sprintf(str, "%d", messages_bucket[elem_pos].AEM_sender);
 
-			strcat(to_send_msg, (char*) str);
-			strcat(to_send_msg, "_");
+		strcat(to_send_msg, (char*) str);
+		strcat(to_send_msg, "_");
     		  
-			sprintf(str, "%d", messages_bucket[elem_pos].AEM_receiver);
-			strcat(to_send_msg, (char*) str);
+		sprintf(str, "%d", messages_bucket[elem_pos].AEM_receiver);
+		strcat(to_send_msg, (char*) str);
     		  
-			strcat(to_send_msg, "_");
+		strcat(to_send_msg, "_");
     		  
-			sprintf(str, "%llu", messages_bucket[elem_pos].timestamp);
-			strcat(to_send_msg, str);
+		sprintf(str, "%llu", messages_bucket[elem_pos].timestamp);
+		strcat(to_send_msg, str);
     		  
-			strcat(to_send_msg, "_");
-			strcat(to_send_msg, (char*) messages_bucket[elem_pos].message);
+		strcat(to_send_msg, "_");
+		strcat(to_send_msg, (char*) messages_bucket[elem_pos].message);
 
-			// Do I need to remove the message from the bucket after 
-			// I send it or do I keep it?????
-			// Remove lastmessage from the bucket
+		// Do I need to remove the message from the bucket after 
+		// I send it or do I keep it?????
+		// Remove lastmessage from the bucket
     		//if (circ_bbuf_pop(&my_circ_buf, &out_data)) {
-       	//	printf("CB is empty\n");
+       		//	printf("CB is empty\n");
         	//	//return -1;
     		//}
 
@@ -370,18 +356,14 @@ void *send_messages()
 	return NULL;
 }
 
-
+// Our server listening to other devices in the same range 10.0.0.1/24
 void *Server()
 {
-	int sockfd, newsockfd, portno;
+     int sockfd, newsockfd, portno;
      socklen_t clilen;
      char buffer[256];
      struct sockaddr_in serv_addr, cli_addr;
      int n;
-     //if (argc < 2) {
-     //    fprintf(stderr,"ERROR, no port provided\n");
-     //    exit(1);
-     //}
      sockfd = socket(AF_INET, SOCK_STREAM, 0);
      if (sockfd < 0) 
         error("ERROR opening socket");
@@ -420,21 +402,16 @@ void *Server()
     	token = strtok(NULL, "_");
     	a_message2.timestamp = atoi(token);
     	token = strtok(NULL, "_");
-  		memset(a_message2.message, 0, sizeof a_message2.message);
+  	memset(a_message2.message, 0, sizeof a_message2.message);
      	strcat(a_message2.message, token);
      	
      	// Check if the message allready exists in the bucket
      	if(checkIfExists(a_message2)==0) {
-     	//}
      		// push the message in the bucket
-     		//if (circ_bbuf_push(&my_circ_buf, a_message)) {
-        	//	printf("Out of space in CB\n");
-        	//	return NULL;
-    		//}
-    		printf("MESSAGE RECEIVED");
     		circ_bbuf_push(&my_circ_buf, a_message2);
+    		printf("MESSAGE RECEIVED");
     		
-      		n = write(newsockfd,"Message RECEIVED\n",18);
+      		n = write(newsockfd,"Message RECEIVED\n",18); //reply
       		if (n < 0) error("ERROR writing to socket");
     	}
     	else {
@@ -468,6 +445,6 @@ int main(int argc, char *argv[])
 	pthread_join(threads[1], NULL);
 	pthread_join(threads[2], NULL);
 	
-	//Free the variables??
+	//Free the variables here??
 	return 0;
 }
